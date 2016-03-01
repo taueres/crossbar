@@ -383,6 +383,32 @@ def run_command_status(options, **kwargs):
         sys.exit(0)
 
 
+def run_command_clean_cookies(options, **kwargs):
+    """
+    Subcommand "crossbar clean-cookies".
+    """
+
+    from crossbar.router.cookiestore import CookieFileCleaner, CookieStoreFileBacked
+
+    log = make_logger()
+
+    configfile = os.path.join(options.cbdir, options.config)
+
+    with open(configfile, 'r') as infile:
+        config = json.load(infile)  # type: dict
+
+    for worker in config['workers']:
+        for transport in worker['transports']:  # type: dict
+            if 'cookie' in transport:
+                store = transport['cookie']['store']
+                if store['type'] == 'file':
+                    cookiestore = CookieStoreFileBacked(store['filename'], transport['cookie'])
+                    cleaner = CookieFileCleaner(cookiestore)
+                    cleaner.clean()
+
+                    log.info('{filename} cookie file cleaned.'.format(filename=store['filename']))
+
+
 def run_command_stop(options, exit=True, **kwargs):
     """
     Subcommand "crossbar stop".
@@ -841,6 +867,24 @@ def run(prog=None, args=None, reactor=None):
                                help="Crossbar.io node directory (overrides ${CROSSBAR_DIR} and the default ./.crossbar)")
 
     parser_status.set_defaults(func=run_command_status)
+
+    # "clean-cookies" command
+    #
+    parser_clean_cookies = subparsers.add_parser('clean-cookies',
+                                          help='Clean the cookie files')
+
+    parser_clean_cookies.add_argument('--cbdir',
+                               type=six.text_type,
+                               default=None,
+                               help="Crossbar.io node directory (overrides ${CROSSBAR_DIR} and the default ./.crossbar)")
+
+
+    parser_clean_cookies.add_argument('--config',
+                              type=six.text_type,
+                              default=None,
+                              help="Crossbar.io configuration file (overrides default CBDIR/config.json)")
+
+    parser_clean_cookies.set_defaults(func=run_command_clean_cookies)
 
     # "check" command
     #

@@ -264,7 +264,9 @@ class CookieStoreFileBacked(CookieStore):
         n = 0
         for cookie in self._iter_persisted():
             id = cookie.pop('id')
-            self._cookies[id] = cookie
+            if id not in self._cookies:
+                self._cookies[id] = {}
+            self._cookies[id].update(cookie)
             n += 1
 
         self.log.info("Loaded {cnt_cookie_records} cookie records from file. Cookie store has {cnt_cookies} entries.", cnt_cookie_records=n, cnt_cookies=len(self._cookies))
@@ -290,3 +292,31 @@ class CookieStoreFileBacked(CookieStore):
             if authid != cookie['authid'] or authrole != cookie['authrole'] or authmethod != cookie['authmethod']:
                 CookieStore.setAuth(self, cbtid, authid, authrole, authmethod)
                 self._persist(cbtid, cookie, status='modified')
+
+    def iter_cookies(self):
+        for cbtid, cookie in self._cookies.items():
+            yield cbtid, cookie
+
+
+class CookieFileCleaner(object):
+
+    def __init__(self, cookieStore):
+        self._cookieStore = cookieStore
+        self._cookie_file_name = cookieStore._cookie_file_name
+        self._cookie_file = open(self._cookie_file_name, 'w')
+
+    def _persist(self, cbtid, c):
+        self._cookie_file.write(json.dumps({
+            'id': cbtid,
+            'created': c['created'],
+            'max_age': c['max_age'],
+            'authid': c['authid'],
+            'authrole': c['authrole'],
+            'authmethod': c['authmethod']
+        }) + '\n')
+        self._cookie_file.flush()
+        os.fsync(self._cookie_file.fileno())
+
+    def clean(self):
+        for cbtid, cookie in self._cookieStore.iter_cookies():
+            self._persist(cbtid, cookie)
